@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Yotoqxona Nazorati</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body class="theme-{{ theme }}">
+  <div class="app-container">
+    <header class="topbar glass-card">
+      <div>
+        <div class="brand-title">Yotoqxona Nazorati</div>
+        <div class="date-badge">Bugun: <strong>{{ formatted_today }}</strong> · {{ now_time }}</div>
+      </div>
+
+      <div class="topbar-actions">
+        <form method="POST" action="{{ url_for('toggle_theme') }}" class="inline-form">
+          <input type="hidden" name="next_url" value="{{ request.full_path }}" />
+          {% if theme == 'day' %}
+            <input type="hidden" name="theme" value="night" />
+            <button type="submit" class="btn btn-soft btn-sm">Kechki rejim</button>
+          {% else %}
+            <input type="hidden" name="theme" value="day" />
+            <button type="submit" class="btn btn-soft btn-sm">Kunduzgi rejim</button>
+          {% endif %}
+        </form>
+
+        {% if role %}
+          <span class="role-pill role-{{ role }}">
+            {% if role == 'ustoz' %}Ustoz{% elif role == 'oshpaz' %}Oshpaz{% else %}Super Admin{% endif %}
+          </span>
+          <form method="POST" action="{{ url_for('logout') }}" class="inline-form">
+            <button type="submit" class="btn btn-outline btn-sm">Chiqish</button>
+          </form>
+        {% endif %}
+      </div>
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="alerts">
+          {% for category, msg in messages %}
+            <div class="alert alert-{{ category }}">{{ msg }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <!-- ALOHIDA SAHIFA 1: LOGIN -->
+    {% if page == 'login' %}
+      <section class="login-wrapper">
+        <div class="glass-card login-card">
+          <h1>Tizimga kirish</h1>
+          <p class="muted">Rolni tanlang va PIN-kodni kiriting.</p>
+          <form method="POST" action="{{ url_for('login') }}">
+            <label class="field-label">Rol</label>
+            <div class="role-select-grid">
+              <label class="role-option">
+                <input type="radio" name="role" value="ustoz" checked />
+                <span><strong>Ustoz</strong><small>PIN: 1111</small></span>
+              </label>
+              <label class="role-option">
+                <input type="radio" name="role" value="oshpaz" />
+                <span><strong>Oshpaz</strong><small>PIN: 2222</small></span>
+              </label>
+              <label class="role-option">
+                <input type="radio" name="role" value="superadmin" />
+                <span><strong>Super Admin</strong><small>PIN: 9999</small></span>
+              </label>
+            </div>
+
+            <label class="field-label" for="pin">PIN-kod</label>
+            <input id="pin" type="password" name="pin" class="input" required />
+            <button type="submit" class="btn btn-primary full-width mt-12">Kirish</button>
+          </form>
+        </div>
+      </section>
+
+    <!-- ALOHIDA SAHIFA 2: OSHPAZ -->
+    {% elif page == 'chef' %}
+      <section class="chef-section glass-card">
+        <div class="chef-date">{{ formatted_date }}</div>
+        <div class="chef-label">Yotoqxonada bor o'quvchilar soni</div>
+        <div class="chef-big-number">{{ present_count }} <span>nafar</span></div>
+        <div class="chef-substats">
+          <div>Jami: <strong>{{ total_count }}</strong></div>
+          <div>Yo'q (-): <strong>{{ absent_count }}</strong></div>
+          <div>Belgilanmagan: <strong>{{ unmarked_count }}</strong></div>
+        </div>
+        <div class="chip-row mb-16">
+          {% for item in class_present_summary %}
+            <div class="chip"><strong>{{ item.class_name }}:</strong> {{ item.count }}</div>
+          {% endfor %}
+        </div>
+        <a href="{{ url_for('chef_page') }}" class="btn btn-primary">Yangilash</a>
+      </section>
+
+    <!-- ALOHIDA SAHIFALAR: USTOZ / SUPER ADMIN -->
+    {% else %}
+      <nav class="subnav glass-card">
+        <a href="{{ url_for('attendance_page', date=selected_date) }}" class="nav-tab {% if page == 'attendance' %}active{% endif %}">
+          1. Davomat (Excel)
+        </a>
+        <a href="{{ url_for('phones_page', date=selected_date) }}" class="nav-tab {% if page == 'phones' %}active{% endif %}">
+          2. Telefon Berilgani
+        </a>
+        <a href="{{ url_for('students_page', date=selected_date) }}" class="nav-tab {% if page == 'students' %}active{% endif %}">
+          3. O'quvchi Qo'shish
+        </a>
+        <a href="{{ url_for('rooms_page', date=selected_date) }}" class="nav-tab {% if page == 'rooms' %}active{% endif %}">
+          4. Xonalar (1c–12c)
+        </a>
+        {% if role == 'superadmin' %}
+          <a href="{{ url_for('superadmin_page', date=selected_date) }}" class="nav-tab {% if page == 'superadmin' %}active{% endif %}">
+            5. Super Admin
+          </a>
+        {% endif %}
+      </nav>
+
+      <section class="date-bar glass-card">
+        <form method="GET" action="{{ request.path }}" class="date-form">
+          <label for="date-input"><strong>Sana:</strong></label>
+          <input id="date-input" type="date" name="date" value="{{ selected_date }}" class="input input-sm" onchange="this.form.submit()" />
+          {% if selected_date != today_iso %}
+            <a href="{{ url_for(request.endpoint, date=today_iso) }}" class="btn btn-primary btn-sm">Bugun</a>
+          {% endif %}
+        </form>
+        <div class="live-summary-bar">
+          Jami: <strong id="sum-total">{{ total_count }}</strong> ·
+          Bor (+): <strong id="sum-present" class="txt-green">{{ present_count }}</strong> ·
+          Yo'q (-): <strong id="sum-absent" class="txt-red">{{ absent_count }}</strong> ·
+          Tel: <strong id="sum-phones" class="txt-blue">{{ phone_given_count }}</strong>
+        </div>
+      </section>
+
+      <!-- SAHIFA: EXCEL USLUBIDA DAVOMAT (+ BOSGANDA AVTOMATIK KEYINGI QATORGA O'TADI) -->
+      {% if page == 'attendance' %}
+        <section class="glass-card section-box">
+          <div class="section-header">
+            <div>
+              <h2>Excel Davomat Jadvali ({{ formatted_date }})</h2>
+              <p class="muted">Qatorni bosing yoki ↑/↓ bilan yuring: klaviaturada <strong>+</strong> bossangiz "Bor" bo'lib keyingi qatorga o'tadi, <strong>-</strong> bossangiz sabab tanlash ochiladi.</p>
+            </div>
+            <form method="GET" action="{{ url_for('attendance_page') }}" class="filter-bar">
+              <input type="hidden" name="date" value="{{ selected_date }}" />
+              <select name="class_name" class="input input-sm" onchange="this.form.submit()">
+                <option value="ALL" {% if class_filter == 'ALL' %}selected{% endif %}>Barcha sinflar</option>
+                {% for cname in classes %}
+                  <option value="{{ cname }}" {% if class_filter == cname %}selected{% endif %}>{{ cname }}</option>
+                {% endfor %}
+              </select>
+              <select name="room_code" class="input input-sm" onchange="this.form.submit()">
+                <option value="ALL" {% if room_code_filter == 'ALL' %}selected{% endif %}>1c–12c barchasi</option>
+                {% for rc in room_codes %}
+                  <option value="{{ rc }}" {% if room_code_filter == rc %}selected{% endif %}>{{ rc }}</option>
+                {% endfor %}
+              </select>
+            </form>
+          </div>
+
+          <div class="table-wrap">
+            <table class="excel-table" id="excel-attendance-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>O'quvchi</th>
+                  <th>Sinf</th>
+                  <th>Xona</th>
+                  <th>Holat (+ / -)</th>
+                  <th>Sabab / Izoh</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for st in filtered_students %}
+                  <tr class="excel-row {% if loop.first %}active-row{% endif %}"
+                      tabindex="0"
+                      data-student-id="{{ st.id }}"
+                      data-status="{{ st.status }}"
+                      onclick="focusRow(this)">
+                    <td>{{ loop.index }}</td>
+                    <td class="col-name"><strong>{{ st.full_name }}</strong></td>
+                    <td>{{ st.class_name }}</td>
+                    <td>{{ st.room_code }} <small>({{ st.room_capacity }} k.)</small></td>
+                    <td class="col-status">
+                      <button type="button" class="cell-btn plus-btn {% if st.status == '+' %}is-plus{% endif %}" onclick="event.stopPropagation(); setRowPlus(this.closest('tr'))">+</button>
+                      <button type="button" class="cell-btn minus-btn {% if st.status == '-' %}is-minus{% endif %}" onclick="event.stopPropagation(); openRowMinus(this.closest('tr'))">-</button>
+                      <span class="status-tag" id="tag-{{ st.id }}">
+                        {% if st.status == '+' %}Bor{% elif st.status == '-' %}Yo'q{% else %}—{% endif %}
+                      </span>
+                    </td>
+                    <td class="col-reason">
+                      <div id="reason-display-{{ st.id }}" class="reason-display">
+                        {% if st.status == '-' %}
+                          {{ st.reason_type }}{% if st.reason_note %}: {{ st.reason_note }}{% endif %}
+                        {% endif %}
+                      </div>
+
+                      <div class="inline-reason-editor hidden" id="editor-{{ st.id }}" onclick="event.stopPropagation()">
+                        <select class="input input-sm reason-select" id="rtype-{{ st.id }}" onchange="checkOtherInput({{ st.id }})">
+                          <option value="Sababli" {% if st.reason_type == 'Sababli' %}selected{% endif %}>Sababli</option>
+                          <option value="O'zboshimchalik bilan" {% if st.reason_type == "O'zboshimchalik bilan" %}selected{% endif %}>O'zboshimchalik bilan</option>
+                          <option value="Boshqa sabab" {% if st.reason_type == 'Boshqa sabab' %}selected{% endif %}>Boshqa sabab</option>
+                        </select>
+                        <input type="text" class="input input-sm reason-note-input {% if st.reason_type != 'Boshqa sabab' %}hidden{% endif %}"
+                               id="rnote-{{ st.id }}" value="{{ st.reason_note }}" placeholder="Sabab izohi..." />
+                        <button type="button" class="btn btn-danger btn-sm" onclick="saveRowMinus({{ st.id }}, this.closest('tr'))">
+                          Saqlash &amp; Keyingi
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+      <!-- SAHIFA: TELEFON BERILGANI (MAJBURIY JONLI KAMERA) -->
+      {% elif page == 'phones' %}
+        <section class="glass-card section-box">
+          <div class="section-header">
+            <h2>Telefon Berilgani — Jonli Kamera ({{ formatted_date }})</h2>
+            <span class="muted">Galereyadan rasm tanlash yo'q — faqat jonli kamera.</span>
+          </div>
+
+          <div id="camera-modal" class="camera-panel hidden">
+            <div class="camera-header">
+              <strong id="camera-target-name">Kamera</strong>
+              <button type="button" class="btn btn-outline btn-sm" onclick="closeCamera()">Yopish</button>
+            </div>
+            <div class="camera-viewport">
+              <video id="camera-video" autoplay playsinline></video>
+              <canvas id="camera-canvas" class="hidden"></canvas>
+            </div>
+            <div id="camera-error" class="alert alert-error hidden"></div>
+            <div class="camera-actions">
+              <button type="button" class="btn btn-primary" onclick="capturePhoto()">Rasmga olish va Tasdiqlash</button>
+            </div>
+            <form id="photo-submit-form" method="POST" action="{{ url_for('save_phone_photo') }}" class="hidden">
+              <input type="hidden" name="student_id" id="photo-student-id" />
+              <input type="hidden" name="work_date" value="{{ selected_date }}" />
+              <input type="hidden" name="photo_base64" id="photo-base64" />
+            </form>
+          </div>
+
+          <div class="table-wrap">
+            <table class="excel-table">
+              <thead>
+                <tr>
+                  <th>O'quvchi</th>
+                  <th>Sinf / Xona</th>
+                  <th>Holat</th>
+                  <th>Kamera</th>
+                  <th>Isbot rasm</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for st in students %}
+                  <tr>
+                    <td><strong>{{ st.full_name }}</strong></td>
+                    <td>{{ st.class_name }} · {{ st.room_code }}</td>
+                    <td>
+                      {% if st.phone_given == 1 %}
+                        <span class="badge badge-phone">Berildi ({{ st.phone_time }})</span>
+                      {% else %}
+                        <span class="badge badge-none">Berilmagan</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      <button type="button" class="btn btn-primary btn-sm" onclick="openLiveCamera({{ st.id }}, '{{ st.full_name }}')">
+                        Kamera ochish
+                      </button>
+                    </td>
+                    <td>
+                      {% if st.phone_photo %}
+                        <a href="{{ url_for('static', filename=st.phone_photo) }}" target="_blank" class="btn btn-soft btn-sm">Ko'rish</a>
+                      {% else %}
+                        —
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+      <!-- SAHIFA: O'QUVCHI QO'SHISH VA O'CHIRISH -->
+      {% elif page == 'students' %}
+        <section class="glass-card section-box">
+          <h2>O'quvchi Qo'shish va Ro'yxat</h2>
+          <form method="POST" action="{{ url_for('add_student') }}" class="form-grid mb-16">
+            <input type="hidden" name="work_date" value="{{ selected_date }}" />
+            <div>
+              <label class="field-label">Ism-familiya</label>
+              <input type="text" name="full_name" class="input" required />
+            </div>
+            <div>
+              <label class="field-label">Sinf</label>
+              <input type="text" name="class_name" class="input" list="class-list" placeholder="Masalan: 7-A sinf" required />
+              <datalist id="class-list">
+                {% for cname in classes %}<option value="{{ cname }}"></option>{% endfor %}
+              </datalist>
+            </div>
+            <div>
+              <label class="field-label">Xona (1c–12c)</label>
+              <select name="room_id" class="input" required>
+                {% for rg in rooms_grouped %}
+                  <option value="{{ rg.id }}" {% if rg.occupied_count >= rg.capacity %}disabled{% endif %}>
+                    {{ rg.code }} — {{ rg.sub_label }} ({{ rg.occupied_count }}/{{ rg.capacity }})
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="align-end">
+              <button type="submit" class="btn btn-primary full-width">Qo'shish</button>
+            </div>
+          </form>
+
+          <div class="table-wrap">
+            <table class="excel-table">
+              <thead>
+                <tr>
+                  <th>Ism-familiya</th>
+                  <th>Sinf</th>
+                  <th>Xona</th>
+                  <th>O'chirish</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for st in students %}
+                  <tr>
+                    <td>{{ st.full_name }}</td>
+                    <td>{{ st.class_name }}</td>
+                    <td>{{ st.room_code }} ({{ st.room_sub_label }})</td>
+                    <td>
+                      <form method="POST" action="{{ url_for('delete_student', student_id=st.id) }}" onsubmit="return confirm('O\'chirilsinmi?');">
+                        <input type="hidden" name="work_date" value="{{ selected_date }}" />
+                        <button type="submit" class="btn btn-danger btn-sm">O'chirish</button>
+                      </form>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+      <!-- SAHIFA: XONALAR (1c - 12c: 6 KISHILIK VA 4 KISHILIK) -->
+      {% elif page == 'rooms' %}
+        <section class="glass-card section-box">
+          <h2>Xonalar (1c – 12c) · Har birida 6 kishilik va 4 kishilik</h2>
+          <div class="rooms-grid mt-12">
+            {% for rg in rooms_grouped %}
+              <div class="room-card">
+                <div class="room-card-top">
+                  <span class="room-code-badge">{{ rg.code }}</span>
+                  <span class="room-cap">{{ rg.sub_label }} · <strong>{{ rg.occupied_count }}/{{ rg.capacity }}</strong></span>
+                </div>
+                <div class="room-present-note">Bor (+): <strong>{{ rg.present_in_room }}</strong></div>
+                {% if rg.occupants %}
+                  <ul class="occupant-list">
+                    {% for occ in rg.occupants %}
+                      <li>
+                        <span>{{ occ.full_name }} <small>({{ occ.class_name }})</small></span>
+                        <span class="mini-badge {% if occ.status == '+' %}plus{% elif occ.status == '-' %}minus{% else %}wait{% endif %}">
+                          {{ occ.status if occ.status else '?' }}
+                        </span>
+                      </li>
+                    {% endfor %}
+                  </ul>
+                {% else %}
+                  <p class="empty-room">Bo'sh xona</p>
+                {% endif %}
+              </div>
+            {% endfor %}
+          </div>
+        </section>
+
+      <!-- SAHIFA: SUPER ADMIN -->
+      {% elif page == 'superadmin' and role == 'superadmin' %}
+        <section class="glass-card section-box">
+          <h2>Super Admin Paneli</h2>
+          <div class="stats-grid mt-12">
+            <div class="stat-card glass-card">
+              <div class="stat-title">Davomat yozuvlari</div>
+              <div class="stat-value">{{ total_attendance_records }}</div>
+            </div>
+            <div class="stat-card glass-card">
+              <div class="stat-title">Telefon rasmlari</div>
+              <div class="stat-value">{{ total_photos }}</div>
+            </div>
+            <div class="stat-card glass-card">
+              <div class="stat-title">Xonalar</div>
+              <div class="stat-value">24</div>
+              <div class="stat-sub">1c–12c (6 va 4 kishilik)</div>
+            </div>
+          </div>
+
+          <div class="admin-panels">
+            <form method="POST" action="{{ url_for('superadmin_settings') }}" class="admin-box">
+              <h3>Kunduzgi / Kechki Rejim</h3>
+              <label class="checkbox-row">
+                <input type="checkbox" name="auto_theme" {% if auto_theme_enabled %}checked{% endif %} />
+                <span>Soatga qarab avtomatik (06:00–18:00 Kunduzgi, 18:00–06:00 Kechki)</span>
+              </label>
+              <button type="submit" class="btn btn-primary">Saqlash</button>
+            </form>
+
+            <div class="admin-box">
+              <h3>Kunlik Hisobotni Yuklash (CSV)</h3>
+              <p class="muted">Tanlangan sana ({{ selected_date }}) bo'yicha jadvalni yuklab olish.</p>
+              <a href="{{ url_for('superadmin_export_csv', date=selected_date) }}" class="btn btn-soft">CSV yuklab olish</a>
+            </div>
+
+            <form method="POST" action="{{ url_for('superadmin_reset_day') }}" class="admin-box" onsubmit="return confirm('Tanlangan kun davomati tozalansinmi?');">
+              <h3>Kunni Tozalash</h3>
+              <input type="date" name="reset_date" value="{{ selected_date }}" class="input input-sm" />
+              <button type="submit" class="btn btn-danger">Tozalash</button>
+            </form>
+          </div>
+        </section>
+      {% endif %}
+    {% endif %}
+  </div>
+
+  <script>
+    const CURRENT_DATE = "{{ selected_date }}";
+    let cameraStream = null;
+
+    function getRows() {
+      return Array.from(document.querySelectorAll("#excel-attendance-table tbody tr.excel-row"));
+    }
+
+    function focusRow(row) {
+      if (!row) return;
+      getRows().forEach(r => r.classList.remove("active-row"));
+      row.classList.add("active-row");
+      row.focus();
+      row.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+
+    function moveNextRow(currentRow) {
+      const rows = getRows();
+      const idx = rows.indexOf(currentRow);
+      if (idx >= 0 && idx + 1 < rows.length) {
+        focusRow(rows[idx + 1]);
+      }
+    }
+
+    function movePrevRow(currentRow) {
+      const rows = getRows();
+      const idx = rows.indexOf(currentRow);
+      if (idx > 0) {
+        focusRow(rows[idx - 1]);
+      }
+    }
+
+    function recountStats() {
+      const rows = getRows();
+      if (!rows.length) return;
+      const plusCnt = rows.filter(r => r.dataset.status === "+").length;
+      const minusCnt = rows.filter(r => r.dataset.status === "-").length;
+      const pEl = document.getElementById("sum-present");
+      const aEl = document.getElementById("sum-absent");
+      if (pEl) pEl.textContent = plusCnt;
+      if (aEl) aEl.textContent = minusCnt;
+    }
+
+    async function postAttendance(studentId, status, reasonType = "", reasonNote = "") {
+      const fd = new FormData();
+      fd.append("student_id", studentId);
+      fd.append("work_date", CURRENT_DATE);
+      fd.append("status", status);
+      fd.append("reason_type", reasonType);
+      fd.append("reason_note", reasonNote);
+
+      const res = await fetch("{{ url_for('mark_attendance') }}", {
+        method: "POST",
+        headers: { "X-Excel-Row": "1" },
+        body: fd
+      });
+      return res.ok;
+    }
+
+    async function setRowPlus(row) {
+      if (!row) return;
+      const sid = row.dataset.studentId;
+      const ok = await postAttendance(sid, "+", "", "");
+      if (!ok) return;
+
+      row.dataset.status = "+";
+      row.querySelector(".plus-btn").classList.add("is-plus");
+      row.querySelector(".minus-btn").classList.remove("is-minus");
+      document.getElementById("tag-" + sid).textContent = "Bor";
+      document.getElementById("reason-display-" + sid).textContent = "";
+      document.getElementById("editor-" + sid).classList.add("hidden");
+
+      recountStats();
+      moveNextRow(row);
+    }
+
+    function openRowMinus(row) {
+      if (!row) return;
+      focusRow(row);
+      const sid = row.dataset.studentId;
+      const editor = document.getElementById("editor-" + sid);
+      editor.classList.remove("hidden");
+      checkOtherInput(sid);
+      document.getElementById("rtype-" + sid).focus();
+    }
+
+    function checkOtherInput(sid) {
+      const sel = document.getElementById("rtype-" + sid);
+      const note = document.getElementById("rnote-" + sid);
+      if (sel && note) {
+        if (sel.value === "Boshqa sabab") {
+          note.classList.remove("hidden");
+        } else {
+          note.classList.add("hidden");
+          note.value = "";
+        }
+      }
+    }
+
+    async function saveRowMinus(sid, row) {
+      const rtype = document.getElementById("rtype-" + sid).value;
+      const rnote = document.getElementById("rnote-" + sid).value.trim();
+      if (rtype === "Boshqa sabab" && !rnote) {
+        alert("'Boshqa sabab' uchun qisqa izoh yozing!");
+        return;
+      }
+
+      const ok = await postAttendance(sid, "-", rtype, rnote);
+      if (!ok) return;
+
+      row.dataset.status = "-";
+      row.querySelector(".minus-btn").classList.add("is-minus");
+      row.querySelector(".plus-btn").classList.remove("is-plus");
+      document.getElementById("tag-" + sid).textContent = "Yo'q";
+      document.getElementById("reason-display-" + sid).textContent = rnote ? (rtype + ": " + rnote) : rtype;
+      document.getElementById("editor-" + sid).classList.add("hidden");
+
+      recountStats();
+      moveNextRow(row);
+    }
+
+    document.addEventListener("keydown", function (e) {
+      const active = document.activeElement;
+      if (active && (active.tagName === "INPUT" || active.tagName === "SELECT" || active.tagName === "TEXTAREA")) {
+        return;
+      }
+      const row = document.querySelector("#excel-attendance-table tbody tr.excel-row.active-row");
+      if (!row) return;
+
+      if (e.key === "+" || e.key === "=") {
+        e.preventDefault();
+        setRowPlus(row);
+      } else if (e.key === "-") {
+        e.preventDefault();
+        openRowMinus(row);
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        moveNextRow(row);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        movePrevRow(row);
+      }
+    });
+
+    async function openLiveCamera(studentId, studentName) {
+      const modal = document.getElementById("camera-modal");
+      const targetName = document.getElementById("camera-target-name");
+      const studentInput = document.getElementById("photo-student-id");
+      const video = document.getElementById("camera-video");
+      const errorBox = document.getElementById("camera-error");
+
+      errorBox.classList.add("hidden");
+      errorBox.textContent = "";
+      targetName.textContent = "Kamera: " + studentName;
+      studentInput.value = studentId;
+      modal.classList.remove("hidden");
+
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(t => t.stop());
+      }
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        errorBox.textContent = "Kamera faqat HTTPS yoki localhost da ishlaydi.";
+        errorBox.classList.remove("hidden");
+        return;
+      }
+
+      try {
+        cameraStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" } },
+          audio: false
+        });
+        video.srcObject = cameraStream;
+      } catch (err) {
+        errorBox.textContent = "Kamera xatosi: " + err.message;
+        errorBox.classList.remove("hidden");
+      }
+    }
+
+    function capturePhoto() {
+      const video = document.getElementById("camera-video");
+      const canvas = document.getElementById("camera-canvas");
+      const photoInput = document.getElementById("photo-base64");
+      const form = document.getElementById("photo-submit-form");
+
+      if (!video.videoWidth || !video.videoHeight) return;
+
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      const now = new Date();
+      const stamp = now.toLocaleDateString("uz-UZ") + " " + now.toTimeString().slice(0, 5);
+      ctx.fillStyle = "rgba(0,0,0,0.65)";
+      ctx.fillRect(10, canvas.height - 40, 270, 30);
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 15px sans-serif";
+      ctx.fillText(stamp, 18, canvas.height - 20);
+
+      photoInput.value = canvas.toDataURL("image/jpeg", 0.82);
+      closeCamera();
+      form.submit();
+    }
+
+    function closeCamera() {
+      const modal = document.getElementById("camera-modal");
+      const video = document.getElementById("camera-video");
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(t => t.stop());
+        cameraStream = null;
+      }
+      if (video) video.srcObject = null;
+      if (modal) modal.classList.add("hidden");
+    }
+  </script>
+</body>
+</html>
